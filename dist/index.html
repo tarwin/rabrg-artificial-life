@@ -3,415 +3,800 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Primordial Soup — WASM</title>
+<title>Primordial Soup — specimen deck</title>
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;600&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=IBM+Plex+Mono:wght@300;400;500;600&display=swap');
 
   :root {
-    --bg: #0a0a0f;
-    --surface: #14141f;
-    --border: #252535;
-    --text: #c8c8d8;
-    --text-dim: #6a6a80;
-    --accent: #8b38ec;
-    --accent-glow: rgba(131, 56, 236, 0.3);
+    --void: #050707;
+    --panel: rgba(8, 13, 11, 0.82);
+    --panel-solid: #0a100d;
+    --line: rgba(110, 255, 178, 0.16);
+    --line-bright: rgba(110, 255, 178, 0.45);
+    --ink: #cfe3d6;
+    --ink-dim: #5e7568;
+    --ink-faint: #3a4a41;
+    --phosphor: #3dffa2;
+    --phosphor-dim: rgba(61, 255, 162, 0.12);
+    --amber: #ffd166;
+    --mono: 'IBM Plex Mono', monospace;
+    --serif: 'Instrument Serif', serif;
   }
 
   * { margin: 0; padding: 0; box-sizing: border-box; }
 
+  html, body { height: 100%; }
+
   body {
-    background: var(--bg);
-    color: var(--text);
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 13px;
-    overflow: hidden;
-    height: 100vh;
-    display: flex;
-    flex-direction: column;
-  }
-
-  header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 8px 16px;
-    background: var(--surface);
-    border-bottom: 1px solid var(--border);
-    flex-shrink: 0;
-    z-index: 10;
-  }
-
-  header h1 {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 14px;
-    font-weight: 600;
-    letter-spacing: 0.05em;
-    color: var(--text);
-  }
-  header h1 span { color: var(--accent); }
-
-  .help-btn {
-    background: none;
-    border: 1px solid var(--border);
-    color: var(--text-dim);
-    font-family: inherit;
+    background: var(--void);
+    color: var(--ink);
+    font-family: var(--mono);
     font-size: 12px;
-    width: 24px;
-    height: 24px;
-    padding: 0;
-    flex: none;
-    border-radius: 50%;
-    cursor: pointer;
-    flex-shrink: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: all 0.15s;
-  }
-  .help-btn:hover { border-color: var(--accent); color: var(--text); }
-
-  .stats {
-    margin-left: auto;
-    display: flex;
-    gap: 20px;
-    font-size: 12px;
-    color: var(--text-dim);
-  }
-  .stats .val { color: var(--text); font-weight: 600; }
-
-  .main-area {
-    flex: 1;
-    display: flex;
     overflow: hidden;
-    position: relative;
-  }
-
-  #canvasWrap {
-    flex: 1;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    overflow: hidden;
-    background: #000;
     cursor: crosshair;
   }
 
-  canvas {
+  /* ── The dish: canvas fills everything ── */
+  #dish {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background:
+      radial-gradient(ellipse 120% 90% at 50% 45%, rgba(16, 26, 21, 0.5), transparent 60%),
+      var(--void);
+  }
+
+  #canvasBox {
+    position: relative;
+    line-height: 0;
+    box-shadow: 0 0 90px rgba(61, 255, 162, 0.06), 0 0 12px rgba(0, 0, 0, 0.9);
+  }
+
+  canvas#c {
     image-rendering: pixelated;
     image-rendering: crisp-edges;
   }
 
-  .sidebar {
-    width: 220px;
-    flex-shrink: 0;
-    background: var(--surface);
-    border-left: 1px solid var(--border);
-    padding: 10px;
-    overflow-y: hidden;
+  /* substrate terrain overlay (toggle: T) */
+  #terrain {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    image-rendering: pixelated;
+    pointer-events: none;
+    mix-blend-mode: screen;
+    opacity: 0.32;
+    display: none;
+  }
+
+  /* hairline grid between specimens (toggle: G) */
+  #gridlines {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background-image:
+      linear-gradient(to right, rgba(255, 255, 255, 0.06) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(255, 255, 255, 0.06) 1px, transparent 1px);
+  }
+
+  /* pinned specimen marker */
+  #pinMarker {
+    position: absolute;
+    display: none;
+    pointer-events: none;
+    border: 1px solid var(--phosphor);
+    box-shadow: 0 0 10px rgba(61, 255, 162, 0.55), inset 0 0 6px rgba(61, 255, 162, 0.3);
+  }
+
+  /* faint vignette so panels read against busy soup edges */
+  #vignette {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    background:
+      linear-gradient(to bottom, rgba(5, 7, 7, 0.55), transparent 12%, transparent 82%, rgba(5, 7, 7, 0.6)),
+      radial-gradient(ellipse 140% 110% at 50% 50%, transparent 62%, rgba(5, 7, 7, 0.5));
+    z-index: 2;
+  }
+
+  /* ── Floating instrument panels ── */
+  .panel {
+    position: fixed;
+    z-index: 10;
+    background: var(--panel);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    transition: opacity 0.6s ease;
+  }
+
+  body.ui-idle .panel:not(#pinCard),
+  body.ui-idle #legend {
+    opacity: 0.05;
+    pointer-events: none;
+  }
+
+  body.ui-hidden .panel,
+  body.ui-hidden #legend {
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  /* staggered load-in */
+  @keyframes rise {
+    from { opacity: 0; transform: translateY(8px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  /* fill-mode must be 'backwards': a completed animation that fills forwards
+     would permanently override the ui-idle / ui-hidden opacity rules */
+  #masthead   { animation: rise 0.7s 0.10s cubic-bezier(.2,.7,.2,1) backwards; }
+  #readout    { animation: rise 0.7s 0.22s cubic-bezier(.2,.7,.2,1) backwards; }
+  #console    { animation: rise 0.7s 0.34s cubic-bezier(.2,.7,.2,1) backwards; }
+  #legend     { animation: rise 0.7s 0.46s cubic-bezier(.2,.7,.2,1) backwards; }
+
+  /* ── Masthead (top-left) ── */
+  #masthead {
+    top: 18px;
+    left: 20px;
+    padding: 10px 18px 12px 14px;
+    border-left: 2px solid var(--phosphor);
+  }
+  #masthead h1 {
+    font-family: var(--serif);
+    font-style: italic;
+    font-weight: 400;
+    font-size: 27px;
+    letter-spacing: 0.01em;
+    color: #eafff2;
+    line-height: 1;
+  }
+  #masthead .sub {
+    margin-top: 6px;
+    font-size: 9px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--ink-dim);
+  }
+  #masthead .sub b { color: var(--phosphor); font-weight: 500; }
+
+  /* ── Readout (top-right) ── */
+  #readout {
+    top: 18px;
+    right: 20px;
     display: flex;
+    align-items: stretch;
+    padding: 0;
+  }
+  .gauge {
+    padding: 9px 16px 10px;
+    border-left: 1px solid var(--line);
+    text-align: right;
+    min-width: 86px;
+  }
+  .gauge:first-child { border-left: none; }
+  .gauge .k {
+    font-size: 8px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--ink-dim);
+    margin-bottom: 3px;
+  }
+  .gauge .v {
+    font-size: 15px;
+    font-weight: 500;
+    color: var(--ink);
+    font-variant-numeric: tabular-nums;
+  }
+  .gauge .v small { font-size: 9px; color: var(--ink-dim); margin-left: 2px; }
+  #gaugeEps .v { color: var(--phosphor); }
+
+  /* ── Console (bottom-center) ── */
+  #console {
+    bottom: 18px;
+    right: 20px;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 10px 14px;
+    padding: 10px 14px;
+    max-width: calc(100vw - 40px);
+    white-space: nowrap;
+  }
+  #console.panel { animation-name: rise; }
+
+  .divider { width: 1px; align-self: stretch; background: var(--line); }
+
+  button {
+    font-family: var(--mono);
+    background: transparent;
+    border: 1px solid var(--line);
+    color: var(--ink);
+    font-size: 11px;
+    padding: 7px 14px;
+    border-radius: 2px;
+    cursor: pointer;
+    transition: border-color 0.15s, color 0.15s, background 0.15s, box-shadow 0.15s;
+    letter-spacing: 0.06em;
+  }
+  button:hover { border-color: var(--line-bright); color: #fff; }
+
+  #btnPlay {
+    min-width: 96px;
+    border-color: var(--line-bright);
+    color: var(--phosphor);
+  }
+  #btnPlay.running {
+    background: var(--phosphor-dim);
+    box-shadow: 0 0 18px rgba(61, 255, 162, 0.18) inset, 0 0 14px rgba(61, 255, 162, 0.12);
+    color: var(--phosphor);
+  }
+
+  .knob { display: flex; flex-direction: column; gap: 3px; min-width: 118px; }
+  .knob .k {
+    display: flex;
+    justify-content: space-between;
+    font-size: 8px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--ink-dim);
+  }
+  .knob .k output { color: var(--ink); letter-spacing: 0.04em; }
+
+  input[type="range"] {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 14px;
+    background: transparent;
+    cursor: ew-resize;
+  }
+  input[type="range"]::-webkit-slider-runnable-track {
+    height: 2px;
+    background: linear-gradient(to right, var(--phosphor) var(--fill, 0%), rgba(110,255,178,0.18) var(--fill, 0%));
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 9px;
+    height: 14px;
+    margin-top: -6px;
+    background: var(--panel-solid);
+    border: 1px solid var(--phosphor);
+    border-radius: 1px;
+  }
+  input[type="range"]::-moz-range-track {
+    height: 2px;
+    background: rgba(110,255,178,0.18);
+  }
+  input[type="range"]::-moz-range-progress { height: 2px; background: var(--phosphor); }
+  input[type="range"]::-moz-range-thumb {
+    width: 9px; height: 14px;
+    background: var(--panel-solid);
+    border: 1px solid var(--phosphor);
+    border-radius: 1px;
+  }
+
+  /* lang version segmented control */
+  #langSeg { display: flex; border: 1px solid var(--line); border-radius: 2px; overflow: hidden; }
+  #langSeg button {
+    border: none;
+    border-left: 1px solid var(--line);
+    border-radius: 0;
+    padding: 6px 11px;
+    color: var(--ink-dim);
+    font-size: 11px;
+  }
+  #langSeg button:first-child { border-left: none; }
+  #langSeg button .num { font-family: var(--serif); font-style: italic; font-size: 14px; margin-right: 5px; }
+  #langSeg button.active {
+    background: var(--phosphor-dim);
+    color: var(--phosphor);
+  }
+  #langSeg button:hover:not(.active) { color: var(--ink); }
+
+  .icon-btn { padding: 7px 11px; font-size: 12px; }
+
+  /* ── Settings popover ── */
+  #settings {
+    position: fixed;
+    z-index: 20;
+    bottom: 74px;
+    right: 20px;
+    width: 270px;
+    padding: 14px;
+    display: none;
     flex-direction: column;
     gap: 10px;
   }
-
-  .panel-title {
-    font-size: 10px;
-    font-weight: 600;
+  #settings.open { display: flex; animation: rise 0.25s ease backwards; }
+  #settings .title {
+    font-size: 9px;
+    letter-spacing: 0.22em;
     text-transform: uppercase;
-    letter-spacing: 0.12em;
-    color: var(--text-dim);
-    margin-bottom: 4px;
+    color: var(--ink-dim);
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--line);
   }
+  .field-row { display: flex; gap: 8px; }
+  .field { flex: 1; display: flex; flex-direction: column; gap: 3px; }
+  .field label {
+    font-size: 8px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--ink-dim);
+  }
+  input[type="number"] {
+    font-family: var(--mono);
+    background: rgba(0,0,0,0.4);
+    border: 1px solid var(--line);
+    color: var(--ink);
+    font-size: 12px;
+    padding: 6px 8px;
+    border-radius: 2px;
+    width: 100%;
+  }
+  input[type="number"]:focus { outline: none; border-color: var(--line-bright); }
+  .preset-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .preset-grid button { padding: 6px 4px; font-size: 10px; color: var(--ink-dim); }
+  .preset-grid button:hover { color: var(--ink); }
+  #btnReinit { border-color: var(--line-bright); color: var(--phosphor); }
 
-  .controls { display: flex; flex-direction: column; gap: 8px; }
+  /* generic segmented control (coupling) */
+  .seg { display: flex; border: 1px solid var(--line); border-radius: 2px; overflow: hidden; }
+  .seg button {
+    flex: 1;
+    border: none;
+    border-left: 1px solid var(--line);
+    border-radius: 0;
+    padding: 6px 4px;
+    font-size: 10px;
+    color: var(--ink-dim);
+  }
+  .seg button:first-child { border-left: none; }
+  .seg button.active { background: var(--phosphor-dim); color: var(--phosphor); }
+  .seg button:hover:not(.active) { color: var(--ink); }
 
-  .control-row {
+  .check {
     display: flex;
     align-items: center;
     gap: 8px;
-  }
-
-  .control-row label {
-    font-size: 11px;
-    color: var(--text-dim);
-    min-width: 56px;
-  }
-
-  .control-row input[type="range"] {
-    flex: 1;
-    accent-color: var(--accent);
-    height: 4px;
-  }
-
-  .slider-group {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-  }
-
-  .slider-group .range-val {
     font-size: 10px;
-    color: var(--text-dim);
-    text-align: right;
-  }
-
-  input[type="number"], select {
-    background: var(--bg);
-    border: 1px solid var(--border);
-    color: var(--text);
-    font-family: inherit;
-    font-size: 12px;
-    padding: 4px 8px;
-    border-radius: 4px;
-    width: 100%;
-  }
-
-  .btn-group { display: flex; gap: 6px; }
-
-  button {
-    background: var(--bg);
-    border: 1px solid var(--border);
-    color: var(--text);
-    font-family: inherit;
-    font-size: 12px;
-    padding: 6px 14px;
-    border-radius: 4px;
+    letter-spacing: 0.08em;
+    color: var(--ink);
     cursor: pointer;
-    transition: all 0.15s;
-    flex: 1;
+    user-select: none;
   }
-  button:hover { border-color: var(--accent); color: #fff; }
-  button.active {
-    background: var(--accent);
-    border-color: var(--accent);
-    color: #fff;
-  }
+  .check input { accent-color: var(--phosphor); cursor: pointer; }
+  .check #subHint { color: var(--ink-dim); }
+  #settings .knob .k { font-size: 8px; }
+  #btnTerrain.active, #btnSubReseed.active { border-color: var(--line-bright); color: var(--phosphor); }
 
-  .legend {
+  /* ── Legend (bottom-right) ── */
+  #legend {
+    position: fixed;
+    z-index: 10;
+    left: 20px;
+    bottom: 18px;
+    background: var(--panel);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    padding: 10px 12px;
+    max-width: 270px;
+    transition: opacity 0.6s ease;
+  }
+  #legend .title {
+    font-size: 8px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--ink-dim);
+    margin-bottom: 8px;
+  }
+  #legend .title b { color: var(--phosphor); font-weight: 500; }
+  #legendGrid {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 4px;
+    gap: 3px 14px;
   }
-  .legend-item {
+  .lg-item {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 7px;
     font-size: 10px;
-    color: var(--text-dim);
+    color: var(--ink-dim);
+    animation: rise 0.3s ease backwards;
   }
-  .legend-swatch {
-    width: 10px;
-    height: 10px;
-    border-radius: 2px;
+  .lg-item .sw {
+    width: 9px; height: 9px;
+    border-radius: 1px;
     flex-shrink: 0;
+    box-shadow: 0 0 6px 0 currentColor;
+  }
+  .lg-item .ch { color: var(--ink); font-weight: 600; width: 10px; text-align: center; }
+  .lg-item.vnew .nm::after {
+    content: '•';
+    color: var(--amber);
+    margin-left: 4px;
   }
 
-  .preset-row {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 4px;
+  /* ── Opcode census plot ── */
+  @keyframes riseCenter {
+    from { opacity: 0; transform: translate(-50%, 8px); }
+    to   { opacity: 1; transform: translate(-50%, 0); }
   }
-  .preset-row button { font-size: 10px; padding: 4px 6px; }
-
-  .sep { border-top: 1px solid var(--border); }
-
-  #tooltip {
-    position: fixed;
-    background: var(--surface);
-    border: 1px solid var(--border);
-    padding: 6px 10px;
-    border-radius: 4px;
-    font-size: 11px;
-    pointer-events: none;
-    z-index: 100;
+  #graphPanel {
+    top: 18px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: min(460px, calc(100vw - 40px));
+    padding: 10px 12px 11px;
     display: none;
-    max-width: 200px;
+  }
+  #graphPanel.open { display: block; animation: riseCenter 0.3s ease backwards; }
+  #graphPanel .title {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 8px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--ink-dim);
+    margin-bottom: 8px;
+  }
+  #graphPanel .title #graphPeak { color: var(--ink); letter-spacing: 0.08em; }
+  #graphPanel .title button {
+    margin-left: auto;
+    border: none;
+    padding: 0 2px;
+    font-size: 13px;
+    color: var(--ink-dim);
+    line-height: 1;
+  }
+  #graphPanel .title button:hover { color: #fff; }
+  #graphCanvas {
+    display: block;
+    width: 100%;
+    height: 132px;
   }
 
+  /* ── Pinned specimen card ── */
+  #pinCard {
+    top: 102px;
+    left: 20px;
+    padding: 10px 12px 11px;
+    display: none;
+  }
+  #pinCard .title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 8px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--ink-dim);
+    margin-bottom: 8px;
+  }
+  #pinCard .title b { color: var(--phosphor); font-weight: 500; letter-spacing: 0.08em; }
+  #pinCard .title button {
+    margin-left: auto;
+    border: none;
+    padding: 0 2px;
+    font-size: 13px;
+    color: var(--ink-dim);
+    line-height: 1;
+  }
+  #pinCard .title button:hover { color: #fff; }
+  #pinCard .body { display: flex; gap: 12px; align-items: flex-start; }
+  #pinCanvas {
+    width: 104px; height: 104px;
+    image-rendering: pixelated;
+    border: 1px solid var(--line);
+  }
+  #pinGenome {
+    font-size: 11px;
+    line-height: 13px;
+    letter-spacing: 0.12em;
+    white-space: nowrap;
+  }
+  #pinGenome .junk { color: var(--ink-faint); }
+  #pinCard .meta {
+    margin-top: 7px;
+    font-size: 9px;
+    color: var(--ink-dim);
+    letter-spacing: 0.06em;
+  }
+  #pinCard .meta b { color: var(--phosphor); font-weight: 500; }
+
+  /* ── Specimen magnifier ── */
+  #lens {
+    position: fixed;
+    z-index: 40;
+    display: none;
+    background: var(--panel);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid var(--line-bright);
+    border-radius: 3px;
+    padding: 9px;
+    pointer-events: none;
+  }
+  #lens canvas {
+    display: block;
+    width: 104px; height: 104px;
+    image-rendering: pixelated;
+    border: 1px solid var(--line);
+    box-shadow: none;
+  }
+  #lens .meta {
+    margin-top: 7px;
+    font-size: 9px;
+    line-height: 1.5;
+    color: var(--ink-dim);
+    letter-spacing: 0.06em;
+  }
+  #lens .meta b { color: var(--phosphor); font-weight: 500; }
+
+  /* ── About overlay ── */
   #overlay {
     position: fixed;
     inset: 0;
-    background: rgba(0, 0, 0, 0.2);
-    z-index: 200;
-    display: flex;
+    background: rgba(3, 5, 4, 0.75);
+    backdrop-filter: blur(4px);
+    z-index: 100;
+    display: none;
     align-items: center;
     justify-content: center;
   }
-
-  #overlay .overlay-box {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 32px 40px;
-    max-width: 520px;
-    text-align: center;
-    line-height: 1.7;
+  #overlay.open { display: flex; }
+  #overlay .box {
+    background: var(--panel-solid);
+    border: 1px solid var(--line);
+    border-left: 2px solid var(--phosphor);
+    border-radius: 3px;
+    padding: 36px 44px;
+    max-width: 560px;
+    line-height: 1.8;
+    animation: rise 0.3s ease both;
   }
-
-  #overlay .overlay-box h2 {
-    font-size: 16px;
-    font-weight: 600;
+  #overlay h2 {
+    font-family: var(--serif);
+    font-style: italic;
+    font-weight: 400;
+    font-size: 30px;
+    color: #eafff2;
+    margin-bottom: 4px;
+  }
+  #overlay .tag {
+    font-size: 9px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--ink-dim);
     margin-bottom: 16px;
-    color: var(--text);
   }
-
-  #overlay .overlay-box h2 span {
-    color: var(--accent);
+  #overlay p { font-size: 11px; color: var(--ink-dim); margin-bottom: 6px; }
+  #overlay p.lede { color: var(--ink); margin-bottom: 14px; }
+  #overlay a { color: var(--phosphor); text-decoration: none; }
+  #overlay a:hover { text-decoration: underline; }
+  #overlay .keys { margin: 14px 0 0; font-size: 10px; color: var(--ink-dim); }
+  #overlay .keys kbd {
+    font-family: var(--mono);
+    border: 1px solid var(--line);
+    border-radius: 2px;
+    padding: 1px 6px;
+    margin: 0 3px;
+    color: var(--ink);
+    font-size: 9px;
   }
-
-  #overlay .overlay-box p {
-    font-size: 12px;
-    color: var(--text-dim);
-    margin-bottom: 8px;
-  }
-
-  #overlay .overlay-box a {
-    color: var(--accent);
-    text-decoration: none;
-  }
-
-  #overlay .overlay-box a:hover {
-    text-decoration: underline;
-  }
-
-  #overlay .overlay-close {
-    margin-top: 20px;
-    background: var(--accent);
-    border: 1px solid var(--accent);
-    color: #fff;
-    font-family: inherit;
-    font-size: 12px;
+  #overlay .close {
+    margin-top: 22px;
+    border-color: var(--line-bright);
+    color: var(--phosphor);
     padding: 8px 28px;
-    border-radius: 4px;
-    cursor: pointer;
-    transition: opacity 0.15s;
   }
 
-  #overlay .overlay-close:hover {
-    opacity: 0.85;
+  @media (max-width: 900px) {
+    #readout { display: none; }
+    #legend { display: none; }
   }
 </style>
 </head>
 <body>
-<header>
-  <h1><span>◉</span> primordial soup <span>wasm</span></h1>
-  <div class="stats">
-    <span>epoch <span class="val" id="epochNum">0</span></span>
-    <span>opcode <span class="val" id="opcodePercent">—</span>%</span>
-    <span><span class="val" id="epsDisplay">—</span> epoch/s</span>
-    <span><span class="val" id="gridInfo">—</span></span>
-  </div>
-  <button class="help-btn" onclick="document.getElementById('overlay').style.display='flex'" title="About">?</button>
-</header>
 
-<div class="main-area">
-  <div id="canvasWrap">
+<div id="dish">
+  <div id="canvasBox">
     <canvas id="c"></canvas>
+    <canvas id="terrain"></canvas>
+    <div id="gridlines"></div>
+    <div id="pinMarker"></div>
+  </div>
+</div>
+<div id="vignette"></div>
+
+<!-- masthead -->
+<div class="panel" id="masthead">
+  <h1>primordial soup</h1>
+  <div class="sub">specimen deck · <b id="mastLang">lang Ⅰ</b> · wasm</div>
+</div>
+
+<!-- stats readout -->
+<div class="panel" id="readout">
+  <div class="gauge"><div class="k">epoch</div><div class="v" id="epochNum">0</div></div>
+  <div class="gauge"><div class="k">opcode density</div><div class="v" id="opcodePercent">—<small>%</small></div></div>
+  <div class="gauge" id="gaugeEps"><div class="k">epoch / s</div><div class="v" id="epsDisplay">—</div></div>
+  <div class="gauge"><div class="k">colony</div><div class="v" id="gridInfo">—</div></div>
+</div>
+
+<!-- console -->
+<div class="panel" id="console">
+  <button id="btnPlay">▶ cultivate</button>
+  <button id="btnStep" class="icon-btn" title="single epoch (S)">⏭</button>
+
+  <div class="divider"></div>
+
+  <div class="knob">
+    <div class="k"><span>speed</span><output id="speedVal">1×</output></div>
+    <input type="range" id="speedSlider" min="1" max="50" value="1">
+  </div>
+  <div class="knob">
+    <div class="k"><span>mutation</span><output id="mutVal">0.024%</output></div>
+    <input type="range" id="mutSlider" min="0" max="100" value="24">
   </div>
 
-  <div class="sidebar">
-    <div>
-      <div class="panel-title">Presets</div>
-      <div class="preset-row">
-        <button onclick="applyPreset(60,34,64)">60×34 <small>fast</small></button>
-        <button onclick="applyPreset(120,68,64)">120×68 <small>med</small></button>
-        <button onclick="applyPreset(180,101,64)">180×101 <small>lg</small></button>
-        <button onclick="applyPreset(240,135,64)">240×135 <small>1080p</small></button>
-      </div>
+  <div class="divider"></div>
+
+  <button id="btnGraph" class="icon-btn" title="opcode census plot (P)">📈</button>
+
+  <div class="divider"></div>
+
+  <div id="langSeg" title="instruction set version (switchable live)">
+    <button data-v="1" class="active"><span class="num">Ⅰ</span>classic</button>
+    <button data-v="2"><span class="num">Ⅱ</span>spatial</button>
+    <button data-v="3"><span class="num">Ⅲ</span>extended</button>
+  </div>
+
+  <div class="divider"></div>
+
+  <button id="btnSettings" class="icon-btn" title="colony settings">⚙</button>
+  <button id="btnAbout" class="icon-btn" title="about">?</button>
+</div>
+
+<!-- settings popover -->
+<div class="panel" id="settings">
+  <div class="title">colony settings</div>
+  <div class="field-row">
+    <div class="field"><label>width</label><input type="number" id="inWidth" value="120" min="4" max="480"></div>
+    <div class="field"><label>height</label><input type="number" id="inHeight" value="68" min="4" max="270"></div>
+    <div class="field"><label>seed</label><input type="number" id="inSeed" value="1" min="0"></div>
+  </div>
+  <div class="preset-grid">
+    <button data-preset="60,34">60 × 34 — fast</button>
+    <button data-preset="120,68">120 × 68 — medium</button>
+    <button data-preset="180,101">180 × 101 — large</button>
+    <button data-preset="240,135">240 × 135 — 1080p</button>
+  </div>
+  <button id="btnReinit">↻ reinitialize colony</button>
+
+  <div class="title" style="margin-top:4px">ecology · experimental</div>
+
+  <div class="field">
+    <label>coupling — how partners are chosen</label>
+    <div id="coupleSeg" class="seg">
+      <button data-c="0" class="active">5×5 random</button>
+      <button data-c="1">4-neighbour</button>
+      <button data-c="2">sweep</button>
     </div>
+  </div>
 
-    <div class="sep"></div>
-
-    <div>
-      <div class="panel-title">Grid</div>
-      <div class="controls">
-        <div class="control-row">
-          <label>Width</label>
-          <input type="number" id="inWidth" value="120" min="4" max="480">
-        </div>
-        <div class="control-row">
-          <label>Height</label>
-          <input type="number" id="inHeight" value="68" min="4" max="270">
-        </div>
-        <div class="control-row">
-          <label>Seed</label>
-          <input type="number" id="inSeed" value="1" min="0">
-        </div>
-        <button onclick="reinit()">Re-initialize</button>
-      </div>
-    </div>
-
-    <div class="sep"></div>
-
-    <div>
-      <div class="panel-title">Simulation</div>
-      <div class="controls">
-        <div class="slider-group">
-          <div class="control-row">
-            <label>Speed</label>
-            <input type="range" id="speedSlider" min="1" max="50" value="1">
-          </div>
-          <span class="range-val" id="speedVal">1</span>
-        </div>
-        <div class="slider-group">
-          <div class="control-row">
-            <label>Mutation</label>
-            <input type="range" id="mutSlider" min="0" max="100" value="24">
-          </div>
-          <span class="range-val" id="mutVal">0.024%</span>
-        </div>
-        <div class="btn-group">
-          <button id="btnPlay" onclick="togglePlay()">▶ Play</button>
-          <button onclick="doStep()">Step</button>
-        </div>
-      </div>
-    </div>
-
-    <div class="sep"></div>
-
-    <div>
-      <div class="panel-title">Opcodes</div>
-      <div class="legend">
-        <div class="legend-item"><div class="legend-swatch" style="background:#ef476f"></div>&lt; left h0</div>
-        <div class="legend-item"><div class="legend-swatch" style="background:#ffd166"></div>&gt; right h0</div>
-        <div class="legend-item"><div class="legend-swatch" style="background:#06d6a0"></div>{ left h1</div>
-        <div class="legend-item"><div class="legend-swatch" style="background:#118ab2"></div>} right h1</div>
-        <div class="legend-item"><div class="legend-swatch" style="background:#ff7f50"></div>- dec</div>
-        <div class="legend-item"><div class="legend-swatch" style="background:#8338ec"></div>+ inc</div>
-        <div class="legend-item"><div class="legend-swatch" style="background:#3a86ff"></div>. copy→</div>
-        <div class="legend-item"><div class="legend-swatch" style="background:#ffbe0b"></div>, copy←</div>
-        <div class="legend-item"><div class="legend-swatch" style="background:#8bc926"></div>[ loop start</div>
-        <div class="legend-item"><div class="legend-swatch" style="background:#ff595e"></div>] loop end</div>
-      </div>
-    </div>
+  <label class="check"><input type="checkbox" id="subToggle"> substrate field <span id="subHint">(terrain bends mutation)</span></label>
+  <div class="knob" style="min-width:auto">
+    <div class="k"><span>field strength</span><output id="subStrVal">60%</output></div>
+    <input type="range" id="subStrSlider" min="0" max="100" value="60">
+  </div>
+  <div class="field-row">
+    <button id="btnSubReseed">⟳ new terrain</button>
+    <button id="btnTerrain">show terrain</button>
   </div>
 </div>
 
-<div id="tooltip"></div>
+<!-- opcode legend -->
+<div id="legend">
+  <div class="title">instruction set — <b id="legendLang">lang Ⅰ · classic</b></div>
+  <div id="legendGrid"></div>
+</div>
 
-<div id="overlay">
-  <div class="overlay-box">
-    <h2><span>&#9673;</span> primordial soup <span>wasm</span></h2>
-    <p>Copy of <b>Artificial Life</b> by Ryan Greene</p>
-    <p><a href="https://x.com/rabrg/status/2030466419419463864" target="_blank" rel="noopener">Original post</a></p>
+<!-- opcode census plot -->
+<div class="panel" id="graphPanel">
+  <div class="title">
+    <span>opcode census · <span id="graphSamples">0</span> samples</span>
+    <span id="graphPeak"></span>
+    <button id="btnGraphClose" title="close">×</button>
+  </div>
+  <canvas id="graphCanvas"></canvas>
+</div>
+
+<!-- pinned specimen -->
+<div class="panel" id="pinCard">
+  <div class="title">pinned specimen <b id="pinCoords"></b><button id="btnUnpin" title="unpin">×</button></div>
+  <div class="body">
+    <canvas id="pinCanvas" width="8" height="8"></canvas>
+    <div id="pinGenome"></div>
+  </div>
+  <div class="meta" id="pinMeta"></div>
+</div>
+
+<!-- specimen magnifier -->
+<div id="lens">
+  <canvas id="lensCanvas" width="8" height="8"></canvas>
+  <div class="meta" id="lensMeta"></div>
+</div>
+
+<!-- about (shown on load) -->
+<div id="overlay" class="open">
+  <div class="box">
+    <h2>primordial soup</h2>
+    <div class="tag">field notes on digital abiogenesis</div>
+    <p class="lede">Thousands of random byte-tapes are paired with neighbours, concatenated,
+      and executed as programs that rewrite each other. With nothing but noise and
+      mutation, self-replicators eventually crawl out of the soup.</p>
+    <p>Copy of <b>Artificial Life</b> by Ryan Greene —
+      <a href="https://x.com/rabrg/status/2030466419419463864" target="_blank" rel="noopener">original post</a></p>
     <p><a href="https://github.com/tarwin/rabrg-artificial-life" target="_blank" rel="noopener">github.com/tarwin/rabrg-artificial-life</a></p>
-    <button class="overlay-close" onclick="document.getElementById('overlay').style.display='none'">Close</button>
+    <div class="keys">
+      <kbd>space</kbd> cultivate / rest
+      <kbd>S</kbd> single epoch
+      <kbd>R</kbd> reseed
+      <kbd>1–3</kbd> lang version
+      <kbd>/</kbd> hide interface
+      <kbd>G</kbd> grid lines
+      <kbd>P</kbd> census plot
+      <kbd>T</kbd> terrain
+      <kbd>click</kbd> pin specimen
+    </div>
+    <button class="close" id="btnCloseAbout">resume observation</button>
   </div>
 </div>
 
 <script>
+// ── Opcode catalogue (mirrors the engine; v = lang version that enables it) ──
+const OPCODES = {
+  60:  { ch: '<', nm: 'h0 left',    color: '#ef476f', v: 1 },
+  62:  { ch: '>', nm: 'h0 right',   color: '#ffd166', v: 1 },
+  123: { ch: '{', nm: 'h1 left',    color: '#06d6a0', v: 1 },
+  125: { ch: '}', nm: 'h1 right',   color: '#118ab2', v: 1 },
+  45:  { ch: '-', nm: 'decrement',  color: '#ff7f50', v: 1 },
+  43:  { ch: '+', nm: 'increment',  color: '#8338ec', v: 1 },
+  46:  { ch: '.', nm: 'copy h0→h1', color: '#3a86ff', v: 1 },
+  44:  { ch: ',', nm: 'copy h1→h0', color: '#ffbe0b', v: 1 },
+  91:  { ch: '[', nm: 'loop start', color: '#8bc926', v: 1 },
+  93:  { ch: ']', nm: 'loop end',   color: '#ff595e', v: 1 },
+  94:  { ch: '^', nm: 'h0 up row',  color: '#00f5d4', v: 2 },
+  118: { ch: 'v', nm: 'h0 down row',color: '#f15bb5', v: 2 },
+  40:  { ch: '(', nm: 'h1 up row',  color: '#9b5de5', v: 2 },
+  41:  { ch: ')', nm: 'h1 down row',color: '#00bbf9', v: 2 },
+  48:  { ch: '0', nm: 'zero cell',  color: '#ebebeb', v: 3 },
+  64:  { ch: '@', nm: 'swap heads', color: '#fb5607', v: 3 },
+  33:  { ch: '!', nm: 'swap bytes', color: '#ff006e', v: 3 },
+  63:  { ch: '?', nm: 'random byte',color: '#caffbf', v: 3 },
+};
+const LANG_NAMES = { 1: 'Ⅰ · classic', 2: 'Ⅱ · spatial', 3: 'Ⅲ · extended' };
+const LANG_NUM = { 1: 'Ⅰ', 2: 'Ⅱ', 3: 'Ⅲ' };
 
-// ── WASM loading ──
-let wasm = null;
-let memory = null;
-let running = false;
-let epoch = 0;
+// ── State ──
+let wasm = null, memory = null;
+let running = false, epoch = 0, animId = null;
 let gridW = 120, gridH = 68, tapeSize = 64;
-let animId = null;
 let pixW, pixH;
-let mutNum = 24, mutDen = 100000; // 0.024%
+let mutNum = 24, mutDen = 100000;
+let langVersion = 1;
 
 const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
+const $ = id => document.getElementById(id);
 
 async function loadWasm() {
   const { instance } = await WebAssembly.instantiateStreaming(
@@ -423,104 +808,91 @@ async function loadWasm() {
 }
 
 function initSim() {
-  const seed = parseInt(document.getElementById('inSeed').value) || 1;
+  unpin();
+  const seed = parseInt($('inSeed').value) || 1;
   wasm.init(gridW, gridH, tapeSize, BigInt(seed));
+  wasm.setLangVersion(langVersion);
+  applyEcology();
 
   pixW = gridW * 8;
   pixH = gridH * 8;
   canvas.width = pixW;
   canvas.height = pixH;
-
-  // Scale canvas to fit
   fitCanvas();
 
   epoch = 0;
+  resetCensus();
+  if (terrainShown) drawTerrain();
   updateStats();
   renderFrame();
 }
 
 function fitCanvas() {
-  const wrap = document.getElementById('canvasWrap');
-  const maxW = wrap.clientWidth;
-  const maxH = wrap.clientHeight;
+  const maxW = window.innerWidth, maxH = window.innerHeight;
   const scale = Math.min(maxW / pixW, maxH / pixH, 4);
-  canvas.style.width = Math.floor(pixW * scale) + 'px';
-  canvas.style.height = Math.floor(pixH * scale) + 'px';
+  const dispW = Math.floor(pixW * scale), dispH = Math.floor(pixH * scale);
+  canvas.style.width = dispW + 'px';
+  canvas.style.height = dispH + 'px';
+  $('gridlines').style.backgroundSize = (dispW / gridW) + 'px ' + (dispH / gridH) + 'px';
+  positionMarker();
 }
 
 function renderFrame() {
   wasm.renderPixels();
-  const ptr = wasm.getPixelsPtr();
-  const len = wasm.getPixelsLen();
-  const buf = new Uint8ClampedArray(memory.buffer, ptr, len);
-  const imgData = new ImageData(buf, pixW, pixH);
-  ctx.putImageData(imgData, 0, 0);
+  const buf = new Uint8ClampedArray(memory.buffer, wasm.getPixelsPtr(), wasm.getPixelsLen());
+  ctx.putImageData(new ImageData(buf, pixW, pixH), 0, 0);
+  updatePin();
+  updateLens();
 }
 
 function updateStats() {
-  document.getElementById('epochNum').textContent = epoch.toLocaleString();
-  const oc = wasm.opcodeCount();
-  const tc = wasm.totalCells();
-  const pct = (100 * oc / tc).toFixed(2);
-  document.getElementById('opcodePercent').textContent = pct;
-  document.getElementById('gridInfo').textContent = `${gridW}×${gridH} (${(gridW*gridH).toLocaleString()} programs)`;
+  $('epochNum').textContent = epoch.toLocaleString();
+  const pct = (100 * wasm.opcodeCount() / wasm.totalCells()).toFixed(2);
+  $('opcodePercent').innerHTML = pct + '<small>%</small>';
+  $('gridInfo').textContent = `${gridW}×${gridH}`;
 }
 
-const speedSlider = document.getElementById('speedSlider');
-const mutSlider = document.getElementById('mutSlider');
-
-speedSlider.addEventListener('input', () => {
-  document.getElementById('speedVal').textContent = speedSlider.value;
-});
-
-mutSlider.addEventListener('input', () => {
-  const v = parseInt(mutSlider.value);
-  mutNum = v;
-  const pct = (v / 1000).toFixed(3);
-  document.getElementById('mutVal').textContent = pct + '%';
-});
-
-let lastFrameTime = 0;
-let frameCount = 0;
-let epsTimer = 0;
-let epochsThisSecond = 0;
+// ── Main loop ──
+let epsTimer = 0, epochsThisSecond = 0, censusTimer = 0;
+const CENSUS_INTERVAL = 200;   // ms between opcode-census samples
 
 function loop(ts) {
   if (!running) return;
-  const stepsPerFrame = parseInt(speedSlider.value) || 1;
-
+  const stepsPerFrame = parseInt($('speedSlider').value) || 1;
   for (let i = 0; i < stepsPerFrame; i++) {
     wasm.step(mutNum, mutDen);
     epoch++;
     epochsThisSecond++;
   }
-
   renderFrame();
-
-  // EPS counter
   if (ts - epsTimer >= 1000) {
-    document.getElementById('epsDisplay').textContent = epochsThisSecond;
+    $('epsDisplay').textContent = epochsThisSecond;
     epochsThisSecond = 0;
     epsTimer = ts;
   }
-
+  if (graphOn && ts - censusTimer >= CENSUS_INTERVAL) {
+    sampleCensus();
+    drawGraph();
+    censusTimer = ts;
+  }
   updateStats();
   animId = requestAnimationFrame(loop);
 }
 
 function togglePlay() {
   running = !running;
-  const btn = document.getElementById('btnPlay');
+  const btn = $('btnPlay');
   if (running) {
-    btn.textContent = '⏸ Pause';
-    btn.classList.add('active');
+    btn.textContent = '⏸ rest';
+    btn.classList.add('running');
     epsTimer = performance.now();
     epochsThisSecond = 0;
     animId = requestAnimationFrame(loop);
   } else {
-    btn.textContent = '▶ Play';
-    btn.classList.remove('active');
+    btn.textContent = '▶ cultivate';
+    btn.classList.remove('running');
     if (animId) cancelAnimationFrame(animId);
+    $('epsDisplay').textContent = '—';
   }
 }
 
@@ -530,74 +902,426 @@ function doStep() {
   epoch++;
   renderFrame();
   updateStats();
+  if (graphOn) { sampleCensus(); drawGraph(); }
 }
 
 function reinit() {
   const wasRunning = running;
   if (running) togglePlay();
-  gridW = parseInt(document.getElementById('inWidth').value) || 120;
-  gridH = parseInt(document.getElementById('inHeight').value) || 68;
+  gridW = parseInt($('inWidth').value) || 120;
+  gridH = parseInt($('inHeight').value) || 68;
   initSim();
   if (wasRunning) togglePlay();
 }
 
-function applyPreset(w, h, ts) {
-  document.getElementById('inWidth').value = w;
-  document.getElementById('inHeight').value = h;
-  gridW = w; gridH = h; tapeSize = ts;
-  reinit();
+// ── Lang version ──
+function setLang(v) {
+  langVersion = v;
+  wasm.setLangVersion(v);
+  document.querySelectorAll('#langSeg button').forEach(b =>
+    b.classList.toggle('active', parseInt(b.dataset.v) === v));
+  $('mastLang').textContent = 'lang ' + LANG_NUM[v];
+  $('legendLang').textContent = 'lang ' + LANG_NAMES[v];
+  buildLegend();
+  resetCensus();   // active opcode set changed — start the plot fresh
+  renderFrame();   // recolours instantly: isOpcode is version-aware
+  updateStats();
 }
 
-window.addEventListener('resize', fitCanvas);
+function buildLegend() {
+  const grid = $('legendGrid');
+  grid.innerHTML = '';
+  let i = 0;
+  for (const code in OPCODES) {
+    const op = OPCODES[code];
+    if (op.v > langVersion) continue;
+    const el = document.createElement('div');
+    el.className = 'lg-item' + (op.v > 1 && op.v === langVersion ? ' vnew' : '');
+    el.style.animationDelay = (i * 0.02) + 's';
+    el.innerHTML = `<span class="sw" style="background:${op.color};color:${op.color}"></span>` +
+      `<span class="ch">${op.ch.replace('<','&lt;').replace('>','&gt;')}</span>` +
+      `<span class="nm">${op.nm}</span>`;
+    grid.appendChild(el);
+    i++;
+  }
+}
 
-// ── Tooltip: show tape on hover ──
-const tooltip = document.getElementById('tooltip');
-const OPCODE_NAMES = {
-  60: '< (h0 left)', 62: '> (h0 right)',
-  123: '{ (h1 left)', 125: '} (h1 right)',
-  45: '- (dec)', 43: '+ (inc)',
-  46: '. (copy→)', 44: ', (copy←)',
-  91: '[ (loop)', 93: '] (end loop)'
-};
+// ── Controls wiring ──
+$('btnPlay').addEventListener('click', togglePlay);
+$('btnStep').addEventListener('click', doStep);
+$('btnReinit').addEventListener('click', () => { $('settings').classList.remove('open'); reinit(); });
+$('btnSettings').addEventListener('click', e => { e.stopPropagation(); $('settings').classList.toggle('open'); });
+$('btnAbout').addEventListener('click', () => $('overlay').classList.add('open'));
+$('btnCloseAbout').addEventListener('click', () => $('overlay').classList.remove('open'));
+$('overlay').addEventListener('click', e => { if (e.target === $('overlay')) $('overlay').classList.remove('open'); });
+document.addEventListener('click', e => {
+  if (!$('settings').contains(e.target) && e.target !== $('btnSettings')) $('settings').classList.remove('open');
+});
 
-canvas.addEventListener('mousemove', (e) => {
-  const rect = canvas.getBoundingClientRect();
-  const scaleX = pixW / rect.width;
-  const scaleY = pixH / rect.height;
-  const px = Math.floor((e.clientX - rect.left) * scaleX);
-  const py = Math.floor((e.clientY - rect.top) * scaleY);
-  const gx = Math.floor(px / 8);
-  const gy = Math.floor(py / 8);
+document.querySelectorAll('#langSeg button').forEach(b =>
+  b.addEventListener('click', () => setLang(parseInt(b.dataset.v))));
 
-  if (gx < 0 || gx >= gridW || gy < 0 || gy >= gridH) {
-    tooltip.style.display = 'none';
+document.querySelectorAll('.preset-grid button').forEach(b =>
+  b.addEventListener('click', () => {
+    const [w, h] = b.dataset.preset.split(',').map(Number);
+    $('inWidth').value = w;
+    $('inHeight').value = h;
+    reinit();
+  }));
+
+// ── Ecology options ──
+let couplingMode = 0, substrateOn = false, substrateStrength = 60, terrainShown = false;
+const terrain = $('terrain');
+const terrainCtx = terrain.getContext('2d');
+
+// push the current JS-side ecology state into the engine (engine globals persist
+// across init(), but this keeps them in sync after a fresh boot / reinit)
+function applyEcology() {
+  if (!wasm) return;
+  wasm.setCoupling(couplingMode);
+  wasm.setSubstrate(substrateOn ? 1 : 0, substrateStrength);
+}
+
+function drawTerrain() {
+  if (!wasm) return;
+  terrain.width = gridW;
+  terrain.height = gridH;
+  const f = new Uint8Array(memory.buffer, wasm.getSubstratePtr(), wasm.getSubstrateLen());
+  const img = terrainCtx.createImageData(gridW, gridH);
+  // teal refuges (low mutation) → amber barriers (high mutation)
+  for (let x = 0; x < gridW; x++) {
+    for (let y = 0; y < gridH; y++) {
+      const v = f[x * gridH + y] / 255;
+      const o = (y * gridW + x) * 4;
+      img.data[o]     = 20 + v * 235;
+      img.data[o + 1] = 120 + v * 60;
+      img.data[o + 2] = 150 - v * 110;
+      img.data[o + 3] = 255;
+    }
+  }
+  terrainCtx.putImageData(img, 0, 0);
+}
+
+function setTerrainShown(on) {
+  terrainShown = on;
+  terrain.style.display = on ? 'block' : 'none';
+  const btn = $('btnTerrain');
+  btn.classList.toggle('active', on);
+  btn.textContent = on ? 'hide terrain' : 'show terrain';
+  if (on) drawTerrain();
+}
+
+document.querySelectorAll('#coupleSeg button').forEach(b =>
+  b.addEventListener('click', () => {
+    couplingMode = parseInt(b.dataset.c);
+    document.querySelectorAll('#coupleSeg button').forEach(x => x.classList.toggle('active', x === b));
+    if (wasm) wasm.setCoupling(couplingMode);
+  }));
+
+$('subToggle').addEventListener('change', () => {
+  substrateOn = $('subToggle').checked;
+  if (wasm) wasm.setSubstrate(substrateOn ? 1 : 0, substrateStrength);
+});
+$('subStrSlider').addEventListener('input', () => {
+  substrateStrength = parseInt($('subStrSlider').value);
+  $('subStrVal').textContent = substrateStrength + '%';
+  syncSlider($('subStrSlider'));
+  if (wasm) wasm.setSubstrate(substrateOn ? 1 : 0, substrateStrength);
+});
+$('btnSubReseed').addEventListener('click', () => {
+  if (!wasm) return;
+  wasm.regenSubstrate(BigInt(Math.floor(Math.random() * 1e9)));
+  if (terrainShown) drawTerrain();
+});
+$('btnTerrain').addEventListener('click', () => setTerrainShown(!terrainShown));
+syncSlider($('subStrSlider'));
+
+function syncSlider(el) {
+  const pct = 100 * (el.value - el.min) / (el.max - el.min);
+  el.style.setProperty('--fill', pct + '%');
+}
+const speedSlider = $('speedSlider'), mutSlider = $('mutSlider');
+speedSlider.addEventListener('input', () => {
+  $('speedVal').textContent = speedSlider.value + '×';
+  syncSlider(speedSlider);
+});
+mutSlider.addEventListener('input', () => {
+  mutNum = parseInt(mutSlider.value);
+  $('mutVal').textContent = (mutNum / 1000).toFixed(3) + '%';
+  syncSlider(mutSlider);
+});
+syncSlider(speedSlider);
+syncSlider(mutSlider);
+
+// ── Keyboard ──
+document.addEventListener('keydown', e => {
+  if (e.target.tagName === 'INPUT') return;
+  if (e.code === 'Space') { e.preventDefault(); togglePlay(); }
+  else if (e.key === 's' || e.key === 'S') doStep();
+  else if (e.key === 'r' || e.key === 'R') {
+    $('inSeed').value = Math.floor(Math.random() * 1e9);
+    reinit();
+  }
+  else if (e.key >= '1' && e.key <= '3') setLang(parseInt(e.key));
+  else if (e.key === '/') {
+    e.preventDefault();
+    document.body.classList.toggle('ui-hidden');
+  }
+  else if (e.key === 'g' || e.key === 'G') {
+    const gl = $('gridlines');
+    gl.style.display = gl.style.display === 'none' ? 'block' : 'none';
+  }
+  else if (e.key === 'p' || e.key === 'P') toggleGraph();
+  else if (e.key === 't' || e.key === 'T') setTerrainShown(!terrainShown);
+  else if (e.key === 'Escape') {
+    $('overlay').classList.remove('open');
+    $('settings').classList.remove('open');
+  }
+});
+
+// ── UI idle fade: the soup owns the screen ──
+let idleTimer = null;
+function wake() {
+  document.body.classList.remove('ui-idle');
+  clearTimeout(idleTimer);
+  idleTimer = setTimeout(() => {
+    if (running && !$('settings').classList.contains('open') &&
+        !$('overlay').classList.contains('open')) {
+      document.body.classList.add('ui-idle');
+    }
+  }, 3000);
+}
+['mousemove', 'mousedown', 'keydown', 'touchstart'].forEach(ev =>
+  document.addEventListener(ev, wake, { passive: true }));
+wake();
+
+// ── Opcode census plot ──
+const MAX_SAMPLES = 320;
+let history = [];          // each entry: { epoch, counts: {code: n} }
+let graphOn = false;
+const gCanvas = $('graphCanvas');
+const gCtx = gCanvas.getContext('2d');
+
+function activeCodes() {
+  return Object.keys(OPCODES).filter(c => OPCODES[c].v <= langVersion);
+}
+
+function sampleCensus() {
+  if (!wasm) return;
+  wasm.computeHistogram();
+  const h = new Int32Array(memory.buffer, wasm.getHistogramPtr(), 256);
+  const counts = {};
+  for (const c of activeCodes()) counts[c] = h[c];
+  history.push({ epoch, counts });
+  if (history.length > MAX_SAMPLES) history.shift();
+}
+
+function resetCensus() {
+  history = [];
+  if (graphOn) { sampleCensus(); drawGraph(); }
+}
+
+function sizeGraphCanvas() {
+  const dpr = window.devicePixelRatio || 1;
+  const r = gCanvas.getBoundingClientRect();
+  gCanvas.width = Math.round(r.width * dpr);
+  gCanvas.height = Math.round(r.height * dpr);
+  gCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+
+function drawGraph() {
+  if (!graphOn) return;
+  const w = gCanvas.clientWidth, h = gCanvas.clientHeight;
+  gCtx.clearRect(0, 0, w, h);
+
+  // peak across all active opcode rows in the window
+  let peak = 1;
+  for (const s of history)
+    for (const c in s.counts) if (s.counts[c] > peak) peak = s.counts[c];
+
+  // baseline grid (quarters)
+  gCtx.strokeStyle = 'rgba(255,255,255,0.05)';
+  gCtx.lineWidth = 1;
+  for (let q = 0; q <= 4; q++) {
+    const y = Math.round((h - 1) * q / 4) + 0.5;
+    gCtx.beginPath(); gCtx.moveTo(0, y); gCtx.lineTo(w, y); gCtx.stroke();
+  }
+
+  if (history.length < 2) {
+    $('graphPeak').textContent = '';
+    $('graphSamples').textContent = history.length;
     return;
   }
 
-  const progIdx = gx * gridH + gy;
-  const ptr = wasm.getProgramsPtr();
-  const tape = new Uint8Array(memory.buffer, ptr + progIdx * tapeSize, tapeSize);
+  const n = history.length;
+  const xOf = i => (w - 1) * i / (MAX_SAMPLES - 1);
+  const yOf = v => (h - 2) * (1 - v / peak) + 1;
 
-  let opcodes = 0;
-  for (let i = 0; i < tapeSize; i++) {
-    if (OPCODE_NAMES[tape[i]]) opcodes++;
+  for (const c of activeCodes()) {
+    gCtx.strokeStyle = OPCODES[c].color;
+    gCtx.lineWidth = 1.25;
+    gCtx.globalAlpha = 0.9;
+    gCtx.beginPath();
+    for (let i = 0; i < n; i++) {
+      const x = xOf(i + (MAX_SAMPLES - n));
+      const y = yOf(history[i].counts[c] || 0);
+      i === 0 ? gCtx.moveTo(x, y) : gCtx.lineTo(x, y);
+    }
+    gCtx.stroke();
   }
+  gCtx.globalAlpha = 1;
 
-  tooltip.innerHTML = `<b>Program [${gx},${gy}]</b><br>` +
-    `Opcodes: ${opcodes}/${tapeSize} (${(100*opcodes/tapeSize).toFixed(0)}%)`;
-  tooltip.style.display = 'block';
-  tooltip.style.left = (e.clientX + 12) + 'px';
-  tooltip.style.top = (e.clientY + 12) + 'px';
+  $('graphPeak').textContent = 'peak ' + peak.toLocaleString();
+  $('graphSamples').textContent = n;
+}
+
+function toggleGraph(force) {
+  graphOn = force === undefined ? !graphOn : force;
+  $('graphPanel').classList.toggle('open', graphOn);
+  $('btnGraph').style.color = graphOn ? 'var(--phosphor)' : '';
+  if (graphOn) {
+    sizeGraphCanvas();
+    if (history.length === 0) sampleCensus();
+    drawGraph();
+  }
+}
+
+$('btnGraph').addEventListener('click', () => toggleGraph());
+$('btnGraphClose').addEventListener('click', () => toggleGraph(false));
+
+// ── Pinned specimen ──
+// Programs never move on the grid, so pinning a cell = following that organism.
+let pinned = null;
+const pinCtx = $('pinCanvas').getContext('2d');
+const pinImg = pinCtx.createImageData(8, 8);
+
+function cellFromEvent(e) {
+  const rect = canvas.getBoundingClientRect();
+  const gx = Math.floor((e.clientX - rect.left) / rect.width * gridW);
+  const gy = Math.floor((e.clientY - rect.top) / rect.height * gridH);
+  if (gx < 0 || gx >= gridW || gy < 0 || gy >= gridH) return null;
+  return { gx, gy };
+}
+
+function unpin() {
+  pinned = null;
+  $('pinCard').style.display = 'none';
+  $('pinMarker').style.display = 'none';
+}
+
+function positionMarker() {
+  const m = $('pinMarker');
+  if (!pinned) { m.style.display = 'none'; return; }
+  const tw = canvas.clientWidth / gridW, th = canvas.clientHeight / gridH;
+  m.style.display = 'block';
+  m.style.left = (pinned.gx * tw) + 'px';
+  m.style.top = (pinned.gy * th) + 'px';
+  m.style.width = tw + 'px';
+  m.style.height = th + 'px';
+}
+
+function updatePin() {
+  if (!pinned || !wasm) return;
+  const tape = new Uint8Array(memory.buffer,
+    wasm.getProgramsPtr() + (pinned.gx * gridH + pinned.gy) * tapeSize, tapeSize);
+  let live = 0, genome = '';
+  for (let i = 0; i < tapeSize; i++) {
+    const op = OPCODES[tape[i]];
+    const active = op && op.v <= langVersion;
+    const rgb = active ? LUT[tape[i]] : [20, 20, 20];
+    pinImg.data[i * 4] = rgb[0];
+    pinImg.data[i * 4 + 1] = rgb[1];
+    pinImg.data[i * 4 + 2] = rgb[2];
+    pinImg.data[i * 4 + 3] = 255;
+    if (active) {
+      live++;
+      genome += `<span style="color:${op.color}">` +
+        op.ch.replace('<', '&lt;').replace('>', '&gt;') + '</span>';
+    } else {
+      genome += '<span class="junk">·</span>';
+    }
+    if (i % 8 === 7) genome += '<br>';
+  }
+  pinCtx.putImageData(pinImg, 0, 0);
+  $('pinGenome').innerHTML = genome;
+  $('pinMeta').innerHTML =
+    `opcodes <b>${live}/${tapeSize}</b> · ${(100 * live / tapeSize).toFixed(0)}%`;
+}
+
+canvas.addEventListener('click', e => {
+  const cell = cellFromEvent(e);
+  if (!cell) return;
+  if (pinned && pinned.gx === cell.gx && pinned.gy === cell.gy) { unpin(); return; }
+  pinned = cell;
+  $('pinCoords').textContent = cell.gx + ',' + cell.gy;
+  $('pinCard').style.display = 'block';
+  positionMarker();
+  updatePin();
 });
+$('btnUnpin').addEventListener('click', unpin);
 
+// ── Specimen magnifier ──
+const lens = $('lens');
+const lensCtx = $('lensCanvas').getContext('2d');
+const lensImg = lensCtx.createImageData(8, 8);
+
+function hexToRgb(hex) {
+  return [parseInt(hex.slice(1, 3), 16), parseInt(hex.slice(3, 5), 16), parseInt(hex.slice(5, 7), 16)];
+}
+const LUT = {};
+for (const code in OPCODES) LUT[code] = hexToRgb(OPCODES[code].color);
+
+let hovered = null;   // redrawn every frame so the preview stays live
+
+function updateLens() {
+  if (!hovered || !wasm) return;
+  const tape = new Uint8Array(memory.buffer,
+    wasm.getProgramsPtr() + (hovered.gx * gridH + hovered.gy) * tapeSize, tapeSize);
+  let live = 0;
+  for (let i = 0; i < tapeSize; i++) {
+    const op = OPCODES[tape[i]];
+    const active = op && op.v <= langVersion;
+    if (active) live++;
+    const rgb = active ? LUT[tape[i]] : [20, 20, 20];
+    lensImg.data[i * 4] = rgb[0];
+    lensImg.data[i * 4 + 1] = rgb[1];
+    lensImg.data[i * 4 + 2] = rgb[2];
+    lensImg.data[i * 4 + 3] = 255;
+  }
+  lensCtx.putImageData(lensImg, 0, 0);
+  $('lensMeta').innerHTML =
+    `specimen <b>${hovered.gx},${hovered.gy}</b><br>` +
+    `opcodes <b>${live}/${tapeSize}</b> · ${(100 * live / tapeSize).toFixed(0)}%`;
+}
+
+canvas.addEventListener('mousemove', e => {
+  hovered = cellFromEvent(e);
+  if (!hovered) { lens.style.display = 'none'; return; }
+
+  updateLens();
+  lens.style.display = 'block';
+  const lw = lens.offsetWidth, lh = lens.offsetHeight;
+  let lx = e.clientX + 18, ly = e.clientY + 18;
+  if (lx + lw > window.innerWidth - 8) lx = e.clientX - lw - 18;
+  if (ly + lh > window.innerHeight - 8) ly = e.clientY - lh - 18;
+  lens.style.left = lx + 'px';
+  lens.style.top = ly + 'px';
+});
 canvas.addEventListener('mouseleave', () => {
-  tooltip.style.display = 'none';
+  hovered = null;
+  lens.style.display = 'none';
 });
 
-// ── Init ──
+window.addEventListener('resize', () => {
+  fitCanvas();
+  if (graphOn) { sizeGraphCanvas(); drawGraph(); }
+});
+
+// ── Boot ──
 loadWasm().then(() => {
+  buildLegend();
   initSim();
-  console.log('Primordial Soup WASM ready');
+  console.log('Primordial Soup WASM ready — lang', wasm.getLangVersion());
 });
 </script>
 </body>
